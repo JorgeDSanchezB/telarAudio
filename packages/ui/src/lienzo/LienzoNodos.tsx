@@ -9,7 +9,7 @@
  * en la app; nada de red ni de motor aquí.
  */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -66,6 +66,16 @@ function LienzoInterno(props: PropsLienzoNodos) {
   const nodosInicializados = useNodesInitialized();
 
   /**
+   * Selección de React Flow (incluye multiselección con Mayús): se mantiene
+   * aquí porque es estado de presentación. Es lo que la tecla Suprimir/
+   * Retroceso borra (deleteKeyCode de ReactFlow). Los nodos que se pasan al
+   * lienzo son controlados: sin este conjunto, cada re-render recrearía los
+   * objetos sin `selected` y la selección interna se perdería, dejando la
+   * tecla de borrado sin efecto.
+   */
+  const [seleccionFlujo, setSeleccionFlujo] = useState<ReadonlySet<string>>(new Set());
+
+  /**
    * Reencuadra el grafo al (des)seleccionar un nodo y cuando llega material
    * nuevo al lienzo (añadir / cargar ejemplo). Se espera a que React Flow
    * tenga las medidas de los nodos (useNodesInitialized) para que el encuadre
@@ -90,6 +100,7 @@ function LienzoInterno(props: PropsLienzoNodos) {
           id: instancia.id,
           type: 'telar-nodo' as const,
           position: instancia.posicion,
+          selected: seleccionFlujo.has(instancia.id),
           data: {
             instancia,
             definicion,
@@ -102,7 +113,7 @@ function LienzoInterno(props: PropsLienzoNodos) {
           },
         };
       }),
-    [props.instancias, props.definiciones, props.estados, props.idSeleccionado, props.enEjecucion, props.onAccionNodo, props.activos],
+    [props.instancias, props.definiciones, props.estados, props.idSeleccionado, props.enEjecucion, props.onAccionNodo, props.activos, seleccionFlujo],
   );
 
   // Mientras el grafo se ejecuta, las aristas se vuelven «hilos en movimiento».
@@ -188,7 +199,35 @@ function LienzoInterno(props: PropsLienzoNodos) {
         onNodeClick={(_, nodo) => props.onSeleccionar(nodo.id)}
         onPaneClick={() => props.onSeleccionar(null)}
         onNodeDragStop={(_, nodo) => props.onMoverNodo(nodo.id, nodo.position)}
-        onNodesDelete={(nodosBorrados) => props.onEliminarNodos(nodosBorrados.map((n) => n.id))}
+        onNodesChange={(cambios) => {
+          // Solo los cambios de selección: posición y borrado llegan por sus
+          // callbacks dedicados y el estado del grafo vive en la app.
+          const seleccion = cambios.getByType('select');
+          if (seleccion.length === 0) {
+            return;
+          }
+          setSeleccionFlujo((previa) => {
+            const nueva = new Set(previa);
+            for (const cambio of seleccion) {
+              if (cambio.selected) {
+                nueva.add(cambio.id);
+              } else {
+                nueva.delete(cambio.id);
+              }
+            }
+            return nueva;
+          });
+        }}
+        onNodesDelete={(nodosBorrados) => {
+          setSeleccionFlujo((previa) => {
+            const nueva = new Set(previa);
+            for (const nodo of nodosBorrados) {
+              nueva.delete(nodo.id);
+            }
+            return nueva;
+          });
+          props.onEliminarNodos(nodosBorrados.map((n) => n.id));
+        }}
         onEdgesDelete={(aristasBorradas) => props.onEliminarAristas(aristasBorradas.map((a) => a.id))}
         onConnect={(conexion) => {
           if (!conexion.source || !conexion.target || !conexion.sourceHandle || !conexion.targetHandle) {

@@ -26,6 +26,8 @@ export interface ConfigExportadorMp3 {
   coreUrl: string;
   wasmUrl: string;
   tasaBits: number;
+  /** Tiempo máximo (ms) para cargar el núcleo de ffmpeg.wasm (~32 MB). */
+  timeoutCargaMs: number;
 }
 
 export function descargarBlob(blob: Blob, nombre: string): void {
@@ -43,25 +45,30 @@ export interface VentanaConFFmpeg {
   FFmpegWASM?: { FFmpeg: new () => FFmpeg };
 }
 
+/**
+ * Cargas de script en curso o terminadas, por URL. Si un <script> falló, se
+ * saca de la tabla para que el siguiente intento vuelva a intentarlo: cache-
+ * ar la promesa rechazada haría imposible reintentar tras un fallo de red.
+ */
+const scriptsCargados = new Map<string, Promise<void>>();
+
 export function cargarScript(url: string): Promise<void> {
-  return new Promise((resolver, rechazar) => {
-    const existente = document.querySelector<HTMLScriptElement>(`script[data-telar-ffmpeg="${url}"]`);
-    if (existente) {
-      existente.addEventListener('load', () => resolver(), { once: true });
-      existente.addEventListener('error', () => rechazar(new Error(`No se pudo cargar ${url}`)), { once: true });
-      if ((window as unknown as VentanaConFFmpeg).FFmpegWASM) {
-        resolver();
-      }
-      return;
-    }
+  const enCurso = scriptsCargados.get(url);
+  if (enCurso) {
+    return enCurso;
+  }
+  const promesa = new Promise<void>((resolver, rechazar) => {
     const script = document.createElement('script');
     script.src = url;
     script.async = true;
-    script.dataset.telarFfmpeg = url;
     script.addEventListener('load', () => resolver(), { once: true });
     script.addEventListener('error', () => rechazar(new Error(`No se pudo cargar ${url}`)), { once: true });
     document.head.appendChild(script);
   });
+  scriptsCargados.set(url, promesa);
+  // Un fallo no se memoriza: la siguiente llamada reintentará la descarga.
+  promesa.catch(() => scriptsCargados.delete(url));
+  return promesa;
 }
 
 export class ExportadorMp3 {
@@ -118,6 +125,7 @@ export class ExportadorMp3 {
       return this.cargando;
     }
     this.cargando = (async () => {
+      let cargaAbortada = false;
       try {
         await cargarScript(this.config.umdUrl);
         const clase = (window as unknown as VentanaConFFmpeg).FFmpegWASM?.FFmpeg;
@@ -127,10 +135,26 @@ export class ExportadorMp3 {
         const ffmpeg = new clase();
         // Sin classWorkerURL: la build UMD resuelve el worker desde su propia
         // ruta pública (/ffmpeg/814.ffmpeg.js).
-        await ffmpeg.load({
-          coreURL: this.config.coreUrl,
-          wasmURL: this.config.wasmUrl,
-        });
+        // La carga lleva límite de tiempo (ffmpegMp3.timeoutCargaMs): si el
+        // worker o el núcleo (~32 MB) no llegan, load() quedaría colgado
+        // indefinidamente (la librería no gestiona ese fallo), así que se
+        // aborta y se traduce a un error de configuración accionable.
+        const control = new AbortController();
+        const temporizador = setTimeout(() => {
+          cargaAbortada = true;
+          control.abort();
+        }, this.config.timeoutCargaMs);
+        try {
+          await ffmpeg.load(
+            {
+              coreURL: this.config.coreUrl,
+              wasmURL: this.config.wasmUrl,
+            },
+            { signal: control.signal },
+          );
+        } finally {
+          clearTimeout(temporizador);
+        }
         this.instancia = ffmpeg;
         return ffmpeg;
       } catch (causa) {
@@ -140,7 +164,9 @@ export class ExportadorMp3 {
             codigo: 'FFMPEG_NO_PREPARADO',
             mensaje: 'No se pudo cargar ffmpeg.wasm.',
             mensajeUsuario:
-              'El exportador MP3 no está disponible porque falta ffmpeg.wasm. Ejecuta "npm run preparar:ffmpeg" en la raíz del proyecto (una sola vez) y vuelve a intentarlo. El export en WAV funciona sin este paso.',
+              cargaAbortada
+                ? 'La descarga del transcodificador (ffmpeg.wasm, ~32 MB) no terminó a tiempo. Revisa tu conexión y vuelve a intentarlo; mientras tanto el export en WAV funciona siempre.'
+                : 'El exportador MP3 no está disponible porque falta ffmpeg.wasm. Ejecuta "npm run preparar:ffmpeg" en la raíz del proyecto (una sola vez) y vuelve a intentarlo. El export en WAV funciona sin este paso.',
             reintentable: false,
           },
           causa,

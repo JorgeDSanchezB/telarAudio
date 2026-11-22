@@ -22,12 +22,12 @@ Todo el procesamiento ligero ocurre **en tu navegador** (Chrome de escritorio). 
 | Nodo **Análisis de tensión** (heurística explicable, curva corregible arrastrando) | **Implementado y verificado en navegador** (variante LLM pendiente de decisión) | `packages/nodos` |
 | Nodo **Efectos de sonido por contexto** (diccionario en config, colocaciones activables) | **Implementado y verificado en navegador** | `packages/nodos`, `public/sfx` |
 | Nodo **Música de fondo** (loop por tensión + ducking por energía de voz) | **Implementado y verificado en navegador** | `packages/nodos`, `public/musica` |
-| UI de nodos visuales (arrastrar, conectar, desconectar, estados, progreso) | **Implementada y verificada en navegador** | `packages/ui` |
+| UI de nodos visuales (arrastrar, conectar, desconectar, estados, progreso, borrado con Suprimir/Retroceso y multiselección con Mayús) | **Implementada y verificada en navegador** | `packages/ui` |
 | Editor de línea de tiempo (waveforms, mover/recortar/dividir, undo/redo, corte destructivo persistente) | **Implementado y verificado en navegador** | `packages/ui`, `packages/linea-tiempo` |
 | Backend opcional FastAPI (trabajos con progreso, cancelación, paginación, rate limit, RFC 7807) | **Implementado y probado** (incluida transcripción real con voz) | `backend` |
 | Exportación WAV | **Implementada** (codificador propio probado) | `packages/nodos` |
 | Exportación MP3 (ffmpeg.wasm) | **Implementada, NO verificada en navegador en el entorno de generación** (ver «Exportar MP3») | `packages/app` |
-| Subida de audio con transcodificación de rescate (AMR, 3gp, WMA, ALAC…) | **Implementada y verificada en navegador** (WMA real: ffmpeg.wasm o backend) | `packages/app`, `backend` |
+| Subida de audio con transcodificación de rescate (AMR, 3gp, WMA, ALAC…) | **Implementada y verificada en navegador** (rescate con backend real y con ffmpeg.wasm; aviso por etapa y error honesto si ambos fallan) | `packages/app`, `backend` |
 | Persistencia entre sesiones (IndexedDB/OPFS) | **NO implementada**: plan en `docs/pending/persistencia-opfs.md` | `docs/pending/` |
 
 La lista completa de decisiones técnicas está en `docs/decisions/` (ADR-001…ADR-015).
@@ -92,7 +92,7 @@ Las pruebas de integración con FFmpeg (`backend/tests/test_ffmpeg_real.py`) se 
 3. Pestaña **Biblioteca** → «+ Añadir archivos de audio» → sube tu narración (WAV/MP3/OGG/M4A; si el navegador no soporta el códec —AMR, 3gp, WMA…— se transcodifica a WAV automáticamente con ffmpeg.wasm o el backend local).
 4. Pestaña **Nodos** → añade una **Fuente de audio** por archivo y elige el archivo en su inspector.
 5. Añade **Fusión de audios** (o **Limpieza de ruido**, o **Ganancia**) y conecta arrastrando desde el punto de la derecha de la fuente hasta la entrada del nodo. En la fusión, ordena las conexiones con ↑↓ en el inspector.
-6. Pulsa **▶ Ejecutar grafo**. Cada nodo muestra su estado (en cola, ejecutando con progreso, listo —con destello de celebración—, en caché, error con botón reintentar); los hilos del grafo se animan mientras se teje.
+6. Pulsa **▶ Ejecutar grafo**. Cada nodo muestra su estado (en cola, ejecutando con progreso, listo —con destello de celebración—, en caché, error con botón reintentar); los hilos del grafo se animan mientras se teje. Borra nodos o conexiones seleccionándolos y pulsando **Suprimir** (o **Retroceso**); con **Mayús+clic** seleccionas varios a la vez.
 7. **⤓ Descargar** la salida del nodo, o **⇥ A línea de tiempo** para editarla: arrastra clips, recorta bordes, divide con `S`, deshaz con `Ctrl+Z`.
 8. **✂ Eliminar región (persistente)**: selecciona un trozo de una pista y persiste el audio recortado de verdad (nuevo archivo en la biblioteca).
 9. **⤓ Mezclar y exportar**: mezcla todas las pistas audibles en un WAV y lo descarga.
@@ -146,7 +146,7 @@ telar-audio/
 | `MODELO_RNNOISE_AUSENTE` | Estás usando el filtro `arnndn` sin modelo: cambia a `afftdn` en el inspector o coloca el modelo en `backend/modelos/std.rnnn`. |
 | `MODELO_NO_DESCARGADO` en el nodo de transcripción | El modelo elegido (p. ej. `small`) no está en `backend/modelos/whisper-<modelo>/`: descárgalo (sección «Transcripción») o cambia el parámetro Modelo a uno disponible; `/api/v1/salud` los lista. |
 | Botón MP3 → `FFMPEG_NO_PREPARADO` | Ejecuta `npm run preparar:ffmpeg` una sola vez y reintenta. |
-| «Ese archivo no se pudo decodificar» (AUDIO_NO_DECODIFICABLE) | El códec no es soportado por el navegador y la transcodificación automática falló. Activa ffmpeg.wasm (`npm run preparar:ffmpeg`, una vez) o arranca el backend local (incluye la capacidad `transcodificar`) y vuelve a subir el archivo. Si el mensaje dice que «ni FFmpeg pudo leerlo», el archivo está corrupto o no es audio. |
+| «Ese archivo no se pudo decodificar» (AUDIO_NO_DECODIFICABLE) | El códec no es soportado por el navegador y la transcodificación automática falló. Si el backend local está activo se usa él primero; si no, ffmpeg.wasm (`npm run preparar:ffmpeg`, una vez). La carga de ffmpeg.wasm tiene límite de tiempo (`ffmpegMp3.timeoutCargaMs`), así que una descarga atascada ya no deja la subida colgada: verás el error con la causa exacta. Si el mensaje dice que «ni FFmpeg pudo leerlo», el archivo está corrupto o no es audio. |
 | La página se queda en «Cargando Telar Audio…» accediendo por IP | En desarrollo, Next 16 solo admite por defecto `localhost`: usa `http://localhost:3000` o añade tu host a `allowedDevOrigins` en `packages/app/next.config.ts`. |
 | Un nodo queda «Bloqueado» | Su entrada viene de un nodo desactivado o con error: el inspector muestra el motivo exacto. Reactiva o corrige el nodo aguas arriba. |
 | La caché muestra resultados antiguos tras cambiar algo externo | Usa «⟳ Invalidar caché» en el inspector del nodo (invalida la rama). Las revisiones de datos (excluir muletilla, corregir curva, apagar colocación) ya invalidan solas a los consumidores. |

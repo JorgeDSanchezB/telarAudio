@@ -173,57 +173,128 @@ function avisoErrorDesdeMotor(error: unknown, acciones?: Aviso['acciones']): Omi
 }
 
 /**
- * Rescate de archivos que el navegador no decodifica (AMR, 3gp, WMA, ALAC…):
- * 1) ffmpeg.wasm en el navegador (offline, requiere "npm run preparar:ffmpeg");
- * 2) backend local con FFmpeg real (capacidad "transcodificar").
- * Si FFmpeg tampoco puede leer el archivo, el error es definitivo (archivo
- * corrupto o no-audio): se informa sin rodeos en lugar de encadenar reintentos.
+ * Rescate de archivos que el navegador no decodifica (AMR, 3gp, WMA, ALAC…).
+ *
+ * Orden de intentos, pensado para que el rescate casi nunca dependa de la
+ * descarga grande (~32 MB) del transcodificador del navegador:
+ * 1) Si el backend local ya está verificado y ofrece "transcodificar": backend
+ *    primero (subida pequeña + FFmpeg real, todo local y rápido).
+ * 2) En caso contrario, ffmpeg.wasm en el navegador (offline; la primera vez
+ *    descarga ~32 MB, con límite de tiempo ffmpegMp3.timeoutCargaMs).
+ * 3) El que no se haya probado, como respaldo.
+ *
+ * Si FFmpeg real (backend) tampoco puede leer el archivo, el error es
+ * definitivo (corrupto o no-audio): se informa sin rodeos en lugar de
+ * encadenar reintentos.
  */
 async function rescatarAWav(
   get: () => EstadoAlmacen,
   bytes: Uint8Array,
   nombre: string,
 ): Promise<Uint8Array> {
-  const { estudio } = get();
+  const { estudio, estadoBackend } = get();
   if (!estudio) {
     throw new ErrorCancelacion();
   }
   const fallos: string[] = [];
 
-  // 1) ffmpeg.wasm en el navegador.
-  if (estudio.transcodificador.disponible()) {
+  const intentarBackend = async (): Promise<Uint8Array> =>
+    estudio.clienteBackend.transcodificarAWav({ bytes });
+  const intentarWasm = async (): Promise<Uint8Array> => estudio.transcodificador.transcodificarAWav(bytes);
+
+  const errorDefinitivoWasm = (error: unknown): boolean =>
+    error instanceof ErrorMotor &&
+    (error.codigo === 'TRANSCODIFICACION_FALLIDA' || error.codigo === 'TRANSCODIFICADOR_DESHABILITADO');
+  const errorDefinitivoBackend = (error: unknown): boolean =>
+    error instanceof ErrorTemporal && error.codigo === 'FFMPEG_FALLO';
+
+  const etiquetaFallo = (origen: string, error: unknown): string =>
+    `${origen}: ${error instanceof Error ? error.message : String(error)}`;
+
+  const backendYaVerificado =
+    estadoBackend?.disponible === true && estadoBackend.capacidades.includes('transcodificar');
+
+  if (backendYaVerificado) {
+    get().avisar({
+      titulo: `«${nombre}»: códec no soportado por el navegador.`,
+      detalle: 'Transcodificando a WAV con el backend local (FFmpeg)…',
+      categoria: 'exito',
+    });
     try {
-      return await estudio.transcodificador.transcodificarAWav(bytes);
+      return await intentarBackend();
     } catch (error) {
-      if (
-        error instanceof ErrorMotor &&
-        (error.codigo === 'TRANSCODIFICACION_FALLIDA' || error.codigo === 'TRANSCODIFICADOR_DESHABILITADO')
-      ) {
-        // FFmpeg tampoco pudo leerlo (o está deshabilitado a propósito):
-        // el backend procesaría exactamente los mismos bytes.
-        throw error;
+      if (errorDefinitivoBackend(error)) {
+        // FFmpeg real tampoco pudo leerlo: no es cosa del navegador.
+        throw new ErrorValidacion({
+          codigo: 'AUDIO_NO_DECODIFICABLE',
+          mensaje: `Ni el navegador ni FFmpeg pudieron leer "${nombre}".`,
+          mensajeUsuario:
+            'Ese archivo no es un formato de audio reconocido (ni el navegador ni FFmpeg pudieron leerlo). Comprueba que no esté corrupto o que sea realmente un audio.',
+          reintentable: false,
+        });
       }
-      fallos.push(`ffmpeg.wasm: ${error instanceof Error ? error.message : String(error)}`);
+      fallos.push(etiquetaFallo('backend local', error));
+    }
+    if (estudio.transcodificador.disponible()) {
+      get().avisar({
+        titulo: 'El backend no pudo transcodificar; probando en el navegador.',
+        detalle: 'Preparando ffmpeg.wasm (descarga única de ~32 MB si es la primera vez)…',
+        categoria: 'temporal',
+      });
+      try {
+        return await intentarWasm();
+      } catch (error) {
+        if (errorDefinitivoWasm(error)) {
+          throw error;
+        }
+        fallos.push(etiquetaFallo('ffmpeg.wasm', error));
+      }
+    } else {
+      fallos.push('ffmpeg.wasm no preparado (falta "npm run preparar:ffmpeg")');
     }
   } else {
-    fallos.push('ffmpeg.wasm no preparado (falta "npm run preparar:ffmpeg")');
-  }
-
-  // 2) Backend local.
-  try {
-    return await estudio.clienteBackend.transcodificarAWav({ bytes });
-  } catch (error) {
-    if (error instanceof ErrorTemporal && error.codigo === 'FFMPEG_FALLO') {
-      // FFmpeg real tampoco pudo leerlo: no es cosa del navegador.
-      throw new ErrorValidacion({
-        codigo: 'AUDIO_NO_DECODIFICABLE',
-        mensaje: `Ni el navegador ni FFmpeg pudieron leer "${nombre}".`,
-        mensajeUsuario:
-          'Ese archivo no es un formato de audio reconocido (ni el navegador ni FFmpeg pudieron leerlo). Comprueba que no esté corrupto o que sea realmente un audio.',
-        reintentable: false,
+    // Sin backend verificado: ffmpeg.wasm primero (todo en el navegador).
+    if (estudio.transcodificador.disponible()) {
+      get().avisar({
+        titulo: `«${nombre}»: códec no soportado por el navegador.`,
+        detalle:
+          'Transcodificando a WAV en el navegador con ffmpeg.wasm (descarga única de ~32 MB si es la primera vez)…',
+        categoria: 'exito',
       });
+      try {
+        return await intentarWasm();
+      } catch (error) {
+        if (errorDefinitivoWasm(error)) {
+          // FFmpeg tampoco pudo leerlo (o está deshabilitado a propósito):
+          // el backend procesaría exactamente los mismos bytes.
+          throw error;
+        }
+        fallos.push(etiquetaFallo('ffmpeg.wasm', error));
+      }
+    } else {
+      fallos.push('ffmpeg.wasm no preparado (falta "npm run preparar:ffmpeg")');
     }
-    fallos.push(`backend local: ${error instanceof Error ? error.message : String(error)}`);
+
+    get().avisar({
+      titulo: 'Probando el backend local para transcodificar…',
+      detalle: 'El transcodificador del navegador no estuvo disponible.',
+      categoria: 'temporal',
+    });
+    try {
+      return await intentarBackend();
+    } catch (error) {
+      if (errorDefinitivoBackend(error)) {
+        // FFmpeg real tampoco pudo leerlo: no es cosa del navegador.
+        throw new ErrorValidacion({
+          codigo: 'AUDIO_NO_DECODIFICABLE',
+          mensaje: `Ni el navegador ni FFmpeg pudieron leer "${nombre}".`,
+          mensajeUsuario:
+            'Ese archivo no es un formato de audio reconocido (ni el navegador ni FFmpeg pudieron leerlo). Comprueba que no esté corrupto o que sea realmente un audio.',
+          reintentable: false,
+        });
+      }
+      fallos.push(etiquetaFallo('backend local', error));
+    }
   }
 
   throw new ErrorValidacion({
@@ -669,12 +740,8 @@ export const useAlmacen = create<EstadoAlmacen>((set, get) => ({
           throw error;
         }
         // Rescate: el navegador no decodifica este códec (AMR, 3gp, WMA, ALAC…).
-        // 1) ffmpeg.wasm en el navegador; 2) backend local con FFmpeg real.
-        get().avisar({
-          titulo: `«${archivo.name}»: códec no soportado por el navegador.`,
-          detalle: 'Transcodificando automáticamente a WAV (ffmpeg.wasm o backend local)…',
-          categoria: 'exito',
-        });
+        // rescatarAWav elige el orden (backend local o ffmpeg.wasm) y avisa
+        // de cada etapa al usuario.
         const rescatadoBytes = await rescatarAWav(get, new Uint8Array(copia), archivo.name);
         bytesDefinitivos = rescatadoBytes;
         rescatado = true;

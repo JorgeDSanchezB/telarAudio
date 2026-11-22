@@ -90,7 +90,9 @@ Guía completa con ejemplo en `docs/arquitectura/04-insercion-extensible.md`. Re
 
 ### Subida de audio resistente
 
-Al subir un archivo: 1) decodifica el navegador; si falla → 2) ffmpeg.wasm en el navegador (requiere `npm run preparar:ffmpeg`); si falla o no está → 3) backend local con FFmpeg real. Si ni FFmpeg puede leerlo, `AUDIO_NO_DECODIFICABLE` es definitivo (archivo corrupto). Todo en `packages/app/src/estado/almacen.ts` (`rescatarAWav`).
+Al subir un archivo: 1) decodifica el navegador; si falla → 2) rescate. El rescate elige orden según lo disponible: **backend local primero si ya está verificado** (subida pequeña + FFmpeg real), **ffmpeg.wasm primero si no hay backend** (offline; primera vez descarga ~32 MB con límite de tiempo `ffmpegMp3.timeoutCargaMs`); el otro como respaldo. Si ni FFmpeg puede leerlo, `AUDIO_NO_DECODIFICABLE` es definitivo (archivo corrupto). Todo en `packages/app/src/estado/almacen.ts` (`rescatarAWav`), con avisos al usuario en cada etapa.
+
+**Detalle crítico de la UI de nodos**: los nodos que se pasan a React Flow son controlados; la selección para borrado (tecla Suprimir/Retroceso) debe reflejarse en el campo `selected` de cada nodo y mantenerse en `LienzoNodos` (`seleccionFlujo`), o cada re-render la pierde y la tecla deja de funcionar.
 
 ---
 

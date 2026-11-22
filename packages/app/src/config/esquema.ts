@@ -47,6 +47,15 @@ const esquemaFfmpegMp3 = z.strictObject({
   coreUrl: z.string().default('/ffmpeg/ffmpeg-core.js'),
   wasmUrl: z.string().default('/ffmpeg/ffmpeg-core.wasm'),
   tasaBits: z.number().int().min(64_000).max(320_000).default(192_000),
+  /**
+   * Tiempo máximo (ms) para cargar el núcleo de ffmpeg.wasm (worker + ~32 MB
+   * de wasm). Si expira, la operación falla con FFMPEG_WASM_TIMEOUT y el
+   * llamante puede degradar (p. ej. al backend local): sin este límite, un
+   * cargador atascado (red lenta, proxy que corta la descarga) dejaría la
+   * subida colgada sin error ni reintento, porque @ffmpeg/ffmpeg no tiene
+   * timeout propio ni gestiona el fallo de creación del worker.
+   */
+  timeoutCargaMs: z.number().int().min(5_000).max(600_000).default(120_000),
 });
 
 const esquemaUi = z.strictObject({

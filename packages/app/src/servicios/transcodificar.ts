@@ -89,6 +89,7 @@ export class TranscodificadorWasm {
       return this.cargando;
     }
     this.cargando = (async () => {
+      let cargaAbortada = false;
       try {
         await cargarScript(this.config.umdUrl);
         const clase = (window as unknown as VentanaConFFmpeg).FFmpegWASM?.FFmpeg;
@@ -96,20 +97,40 @@ export class TranscodificadorWasm {
           throw new Error('El bundle UMD de ffmpeg.wasm no expuso FFmpegWASM');
         }
         const ffmpeg = new clase();
-        await ffmpeg.load({
-          coreURL: this.config.coreUrl,
-          wasmURL: this.config.wasmUrl,
-        });
+        // Límite de tiempo para la carga (ffmpegMp3.timeoutCargaMs): si el
+        // worker o el núcleo no llegan (proxy que corta la descarga, red muy
+        // lenta), load() queda colgado para siempre — la librería no gestiona
+        // ese fallo — y la subida moriría en silencio. Al abortar, el llamador
+        // (rescatarAWav) degrada al backend local con un error reintentable.
+        const control = new AbortController();
+        const temporizador = setTimeout(() => {
+          cargaAbortada = true;
+          control.abort();
+        }, this.config.timeoutCargaMs);
+        try {
+          await ffmpeg.load(
+            {
+              coreURL: this.config.coreUrl,
+              wasmURL: this.config.wasmUrl,
+            },
+            { signal: control.signal },
+          );
+        } finally {
+          clearTimeout(temporizador);
+        }
         this.instancia = ffmpeg;
         return ffmpeg;
       } catch (causa) {
         this.cargando = null;
         throw new ErrorTemporal(
           {
-            codigo: 'FFMPEG_WASM_NO_DISPONIBLE',
-            mensaje: 'No se pudo cargar ffmpeg.wasm para transcodificar.',
-            mensajeUsuario:
-              'El transcodificador (ffmpeg.wasm) no está disponible ahora; se intentará el backend local.',
+            codigo: cargaAbortada ? 'FFMPEG_WASM_TIMEOUT' : 'FFMPEG_WASM_NO_DISPONIBLE',
+            mensaje: cargaAbortada
+              ? `La carga de ffmpeg.wasm no terminó en ${this.config.timeoutCargaMs} ms.`
+              : 'No se pudo cargar ffmpeg.wasm para transcodificar.',
+            mensajeUsuario: cargaAbortada
+              ? `La descarga del transcodificador en el navegador (ffmpeg.wasm, ~32 MB) no terminó a tiempo (${Math.round(this.config.timeoutCargaMs / 1000)} s). Se intentará el backend local; si no está activo, revisa la conexión y vuelve a subir el archivo.`
+              : 'El transcodificador (ffmpeg.wasm) no está disponible ahora; se intentará el backend local.',
             reintentable: true,
           },
           causa,
