@@ -1,0 +1,95 @@
+{
+  "motor": {
+    "maxConcurrencia": 3,
+    "cacheResultados": true,
+    "maxResultadosCache": 64,
+    "timeoutNodoMs": 600000
+  },
+  "backend": {
+    "url": "/backend",
+    "intervaloSondeoMs": 700,
+    "timeoutSaludMs": 3000,
+    "reintentosTemporales": 2,
+    "ttlVerificacionMs": 10000,
+    "backoffBaseMs": 400
+  },
+  "audio": {
+    "tasaMuestreo": 48000
+  },
+  "lineaTiempo": {
+    "limiteHistorial": 100,
+    "confirmacionHistorialMs": 400
+  },
+  "ffmpegMp3": {
+    "habilitado": true,
+    "umdUrl": "/ffmpeg/ffmpeg.js",
+    "coreUrl": "/ffmpeg/ffmpeg-core.js",
+    "wasmUrl": "/ffmpeg/ffmpeg-core.wasm",
+    "tasaBits": 192000
+  },
+  "ui": {
+    "maximoSubidasSimultaneas": 3
+  },
+  "transcripcion": {
+    "modeloDefecto": "small"
+  },
+  "catalogos": {
+    "muletillas": [
+      "eh", "e", "em", "emm", "ehm", "mmm", "mm", "este", "esto", "pues",
+      "o sea", "digamos", "tipo", "vale", "bueno", "¿no?", "no?", "verdad",
+      "¿vale?", "okey", "ok", "ehh"
+    ],
+    "sfx": [
+      {
+        "id": "campana",
+        "nombre": "Campana",
+        "ruta": "/sfx/campana.wav",
+        "terminos": ["campana", "campanadas", "ding", "doblaron", "esquila", "repique"]
+      },
+      {
+        "id": "trueno",
+        "nombre": "Trueno",
+        "ruta": "/sfx/trueno.wav",
+        "terminos": ["trueno", "truenos", "tormenta", "relámpago", "relampago", "rayo", "rayos"]
+      },
+      {
+        "id": "viento",
+        "nombre": "Viento",
+        "ruta": "/sfx/viento.wav",
+        "terminos": ["viento", "brisa", "ventisca", "soplaba"]
+      },
+      {
+        "id": "golpe",
+        "nombre": "Golpe",
+        "ruta": "/sfx/golpe.wav",
+        "terminos": ["golpe", "portazo", "porrazo", "puñetazo", "punetazo", "impacto"]
+      },
+      {
+        "id": "agua",
+        "nombre": "Agua",
+        "ruta": "/sfx/agua.wav",
+        "terminos": ["agua", "río", "rio", "lluvia", "ola", "olas", "arroyo", "cascada"]
+      },
+      {
+        "id": "pajaro",
+        "nombre": "Pájaro",
+        "ruta": "/sfx/pajaro.wav",
+        "terminos": ["pájaro", "pajaro", "pájaros", "pajaros", "ruiseñor", "gorrión", "gorrion", "ave"]
+      }
+    ],
+    "musica": [
+      {
+        "id": "calma",
+        "nombre": "Ambiente — calma",
+        "ruta": "/musica/ambiente-calma.wav",
+        "bandaTension": [0, 45]
+      },
+      {
+        "id": "climax",
+        "nombre": "Ambiente — clímax",
+        "ruta": "/musica/ambiente-climax.wav",
+        "bandaTension": [45, 100]
+      }
+    ]
+  }
+}

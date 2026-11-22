@@ -1,0 +1,15 @@
+{
+  "name": "@telar/motor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Núcleo del motor de procesamiento no lineal basado en DAG. Agnóstico de nodos concretos y sin dependencias externas.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  }
+}

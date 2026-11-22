@@ -1,0 +1,27 @@
+{
+  "name": "telar-audio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plataforma web unificada de postproducción de audio para narración en español: motor DAG no lineal, UI de nodos visuales y editor de línea de tiempo.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @telar/app",
+    "build": "npm run build -w @telar/app",
+    "start": "npm run start -w @telar/app",
+    "test": "vitest run",
+    "tipos": "tsc --noEmit -p packages/motor && tsc --noEmit -p packages/nodos && tsc --noEmit -p packages/linea-tiempo && tsc --noEmit -p packages/ui",
+    "verificar": "npm run tipos && npm test && npm run build",
+    "preparar:ffmpeg": "node scripts/preparar-ffmpeg.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "5.9.3",
+    "vitest": "^5.1.1"
+  }
+}

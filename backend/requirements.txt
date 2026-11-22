@@ -1,0 +1,18 @@
+# Backend opcional de Telar Audio (nodos pesados: limpieza de ruido con
+# FFmpeg/RNNoise y transcripción con faster-whisper).
+# Python 3.11+ recomendado (verificado con 3.12).
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9
+pydantic-settings>=2.6
+python-multipart>=0.0.12
+
+# Transcripción (capacidad "transcripcion"): modelos en backend/modelos/
+# (ver README, sección Transcripción). av fijado: las series 18+ cambian la
+# firma de av.open y rompen faster-whisper 1.2.x.
+faster-whisper>=1.2,<1.3
+av>=15,<18
+
+# Pruebas
+pytest>=8.3
+httpx>=0.27

@@ -1,0 +1,25 @@
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python (backend)
+backend/.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+
+# Regenerable con `npm run preparar:ffmpeg` (ver README)
+packages/app/public/ffmpeg/
+
+# Modelos Whisper y RNNoise: pesados (~75-484 MB), se descargan aparte (ver README)
+backend/modelos/
+
+# Datos de trabajo del backend
+backend/datos/
+
+# Entregables
+*.zip
+.DS_Store
