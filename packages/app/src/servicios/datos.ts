@@ -60,6 +60,25 @@ export class RegistroDatosMemoria implements ServicioRegistroDatos {
   listar(): DatoRegistrado[] {
     return [...this.datos.values()];
   }
+
+  /**
+   * Importa un dato EXTERNO (carga de proyecto .telar.json) conservando su
+   * idDato, tipoDato y revisión: las referencias entre datos (p. ej.
+   * colocaciones→transcripción) deben seguir resolviendo tras la carga.
+   * Si el idDato ya existía en la sesión, el importado lo SUSTITUYE (cargar
+   * un proyecto es la palabra final sobre ese dato).
+   */
+  importar(dato: DatoRegistrado): void {
+    if (!dato.idDato || !dato.tipoDato || !Number.isInteger(dato.revision) || dato.revision < 1) {
+      throw new ErrorValidacion({
+        codigo: 'DATO_IMPORTADO_INVALIDO',
+        mensaje: `El dato importado no es válido (id «${String(dato.idDato)}»).`,
+        mensajeUsuario: 'El archivo de proyecto contiene un dato mal formado.',
+        reintentable: false,
+      });
+    }
+    this.datos.set(dato.idDato, { ...dato });
+  }
 }
 
 /**

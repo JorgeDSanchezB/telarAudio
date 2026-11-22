@@ -94,6 +94,10 @@ Al subir un archivo: 1) decodifica el navegador; si falla → 2) rescate. El res
 
 **Detalle crítico de la UI de nodos**: los nodos que se pasan a React Flow son controlados; la selección para borrado (tecla Suprimir/Retroceso) debe reflejarse en el campo `selected` de cada nodo y mantenerse en `LienzoNodos` (`seleccionFlujo`), o cada re-render la pierde y la tecla deja de funcionar.
 
+### Proyectos de sesión (.telar.json)
+
+«Guardar/Abrir» (barra superior) serializa la **línea de tiempo** (con su audio embebido como base64 float32, sin pérdida, deduplicado por identidad de buffer) y los **datos de la sesión** (transcripciones con sus revisiones, tensión, colocaciones) a un único JSON versionado. El grafo NO se guarda. La carga reemplaza la línea de tiempo (el historial conserva el estado previo), restaura los datos en su ranura exacta (`RegistroDatosMemoria.importar`) y registra los audios en la biblioteca. El panel «Datos» (tercera pestaña izquierda) muestra esos datos al margen del grafo, con los mismos visores/revisores del inspector. Todo en `packages/app/src/servicios/proyectos.ts` (+ pruebas) y `estado/almacen.ts`; decisiones en ADR-016. Cuidado con `cargarConfig.ts`: su lista explícita de secciones debe incluir cualquier sección nueva del esquema.
+
 ---
 
 ## Qué NO se hace

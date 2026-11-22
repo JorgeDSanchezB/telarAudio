@@ -41,6 +41,12 @@ import { codificarWav } from '@telar/nodos';
 import { crearEstudio } from '../servicios/estudio';
 import type { Estudio } from '../servicios/estudio';
 import { descargarBlob } from '../servicios/exportacion';
+import {
+  comprobarTamañoProyecto,
+  deserializarProyecto,
+  nombreArchivoProyecto,
+  serializarProyecto,
+} from '../servicios/proyectos';
 import { cargarConfig } from '../config/cargarConfig';
 import type { ConfigApp } from '../config/esquema';
 
@@ -88,7 +94,7 @@ interface EstadoAlmacen {
   estadoBackend: EstadoBackend | null;
 
   // UI
-  pestañaIzquierda: 'paleta' | 'biblioteca';
+  pestañaIzquierda: 'paleta' | 'biblioteca' | 'datos';
   pestañaPrincipal: 'grafo' | 'linea-tiempo';
   avisos: Aviso[];
 
@@ -115,6 +121,12 @@ interface EstadoAlmacen {
   exportarActivoMp3: (idActivo: string) => Promise<void>;
   ocupadoMp3: boolean;
 
+  /** Guarda la sesión (línea de tiempo + datos) en un .telar.json descargable. */
+  guardarProyecto: () => Promise<void>;
+  /** Carga un .telar.json: restaura pistas (con su audio) y datos de sesión. */
+  cargarProyecto: (archivo: File) => Promise<void>;
+  ocupadoProyecto: boolean;
+
   /** Datos de la sesión: contador de revisiones (para re-render de visores). */
   versionDatos: number;
   /** Revisa un dato (misma ranura) e invalida solo sus consumidores. */
@@ -131,7 +143,7 @@ interface EstadoAlmacen {
   mezclarYExportar: () => Promise<void>;
 
   verificarBackend: () => Promise<void>;
-  fijarPestañaIzquierda: (pestaña: 'paleta' | 'biblioteca') => void;
+  fijarPestañaIzquierda: (pestaña: 'paleta' | 'biblioteca' | 'datos') => void;
   fijarPestañaPrincipal: (pestaña: 'grafo' | 'linea-tiempo') => void;
   cerrarAviso: (id: string) => void;
 
@@ -343,6 +355,7 @@ export const useAlmacen = create<EstadoAlmacen>((set, get) => ({
   ocupadoLineaTiempo: false,
   errorLineaTiempo: null,
   ocupadoMp3: false,
+  ocupadoProyecto: false,
 
   estadoBackend: null,
 
@@ -1097,6 +1110,135 @@ export const useAlmacen = create<EstadoAlmacen>((set, get) => ({
     } catch (error) {
       set({ ocupadoLineaTiempo: false, errorLineaTiempo: error instanceof Error ? error.message : String(error) });
       get().avisar(avisoErrorDesdeMotor(error));
+    }
+  },
+
+  // ------------------------------------------------------------ proyectos
+
+  guardarProyecto: async () => {
+    const { estudio, config } = get();
+    if (!estudio || !config) return;
+    if (get().ocupadoProyecto) {
+      get().avisar({
+        titulo: 'Ya hay una operación de proyecto en curso.',
+        detalle: 'Espera a que termine antes de lanzar otra.',
+        categoria: 'validacion',
+      });
+      return;
+    }
+    const pistasActuales = get().pistas;
+    const datosActuales = estudio.datos.listar();
+    if (pistasActuales.length === 0 && datosActuales.length === 0) {
+      get().avisar({
+        titulo: 'No hay nada que guardar todavía.',
+        detalle: 'Envía audio a la línea de tiempo o ejecuta un nodo de análisis primero.',
+        categoria: 'validacion',
+      });
+      return;
+    }
+    set({ ocupadoProyecto: true });
+    try {
+      const documento = serializarProyecto({ pistas: pistasActuales, datos: datosActuales });
+      const texto = JSON.stringify(documento);
+      comprobarTamañoProyecto(new Blob([texto]).size, config.proyectos.tamanoMaximoMb);
+      const nombre = nombreArchivoProyecto(config.proyectos.prefijoNombre);
+      descargarBlob(new Blob([texto], { type: 'application/json' }), nombre);
+      const transcripciones = datosActuales.filter((dato) => dato.tipoDato === 'transcripcion/v1').length;
+      get().avisar({
+        titulo: `Proyecto guardado como «${nombre}».`,
+        detalle:
+          `${pistasActuales.length} pista(s), ${documento.audios.length} audio(s) y ${datosActuales.length} dato(s) ` +
+          `(${transcripciones} transcripción(es)) · ${(new Blob([texto]).size / (1024 * 1024)).toFixed(1)} MB. ` +
+          'Para recuperar esta sesión, usa «Abrir» y elige ese archivo.',
+        categoria: 'exito',
+      });
+    } catch (error) {
+      get().avisar(avisoErrorDesdeMotor(error));
+    } finally {
+      set({ ocupadoProyecto: false });
+    }
+  },
+
+  cargarProyecto: async (archivo) => {
+    const { estudio, config } = get();
+    if (!estudio || !config) return;
+    if (get().ocupadoProyecto) {
+      get().avisar({
+        titulo: 'Ya hay una operación de proyecto en curso.',
+        detalle: 'Espera a que termine antes de lanzar otra.',
+        categoria: 'validacion',
+      });
+      return;
+    }
+    set({ ocupadoProyecto: true });
+    try {
+      comprobarTamañoProyecto(archivo.size, config.proyectos.tamanoMaximoMb);
+      let bruto: unknown;
+      try {
+        bruto = JSON.parse(await archivo.text());
+      } catch (causa) {
+        throw new ErrorValidacion(
+          {
+            codigo: 'PROYECTO_INVALIDO',
+            mensaje: `«${archivo.name}» no es JSON válido.`,
+            mensajeUsuario:
+              `«${archivo.name}» no es un archivo JSON legible. Comprueba que sea un proyecto .telar.json ` +
+              'descargado desde la aplicación.',
+            reintentable: false,
+          },
+          causa,
+        );
+      }
+      const { documento, pistas, audios } = deserializarProyecto(bruto, {
+        versionEsperada: config.proyectos.versionFormato,
+        crearBuffer: (canales, tasaMuestreo) => estudio.decodificador.crearBuffer(canales, tasaMuestreo),
+      });
+      /* Los audios embebidos se registran en la biblioteca (direccionados por
+       * contenido: cargar dos veces el mismo proyecto no duplica activos) y se
+       * precargan en la caché del decodificador para evitar re-decodificar. */
+      for (const audio of audios) {
+        const bytesWav = codificarWav(audio.canales, audio.documento.tasaMuestreo);
+        const meta = await estudio.activos.poner(
+          new Blob([bytesWav as unknown as BlobPart], { type: 'audio/wav' }),
+          {
+            nombre: `${audio.documento.nombreOrigen.replace(/\.[a-z0-9]+$/i, '')} (proyecto).wav`,
+            mime: 'audio/wav',
+            duracionMs: Math.round((audio.documento.longitud / audio.documento.tasaMuestreo) * 1000),
+            tasaMuestreo: audio.documento.tasaMuestreo,
+            canales: audio.documento.canales.length,
+            bytes: bytesWav.byteLength,
+            origen: 'linea-tiempo',
+          },
+        );
+        estudio.decodificador.registrarEnCache(meta.id, audio.buffer);
+      }
+      for (const dato of documento.datos) {
+        estudio.datos.importar(dato);
+      }
+      /* La carga REEMPLAZA la línea de tiempo; el estado previo queda en el
+       * historial (Deshacer lo recupera). */
+      confirmarPendiente();
+      historial?.apilar(get().pistas);
+      set((estado) => ({
+        pistas,
+        puedeDeshacer: true,
+        puedeRehacer: false,
+        activos: estudio.activos.listar(),
+        versionDatos: estado.versionDatos + 1,
+        pestañaPrincipal: 'linea-tiempo',
+      }));
+      const transcripciones = documento.datos.filter((dato) => dato.tipoDato === 'transcripcion/v1').length;
+      get().avisar({
+        titulo: `Proyecto «${archivo.name}» cargado.`,
+        detalle:
+          `${pistas.length} pista(s) y ${documento.datos.length} dato(s) (${transcripciones} transcripción(es)) restaurados. ` +
+          'Los audios quedaron también en la biblioteca. La pestaña «Datos» muestra las transcripciones.',
+        categoria: 'exito',
+      });
+    } catch (error) {
+      get().avisar(avisoErrorDesdeMotor(error));
+    } finally {
+      set({ ocupadoProyecto: false });
     }
   },
 

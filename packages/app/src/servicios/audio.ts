@@ -75,4 +75,31 @@ export class DecodificadorAudio implements ServicioAudio {
   registrarEnCache(idActivo: string, buffer: AudioBuffer): void {
     this.cache.set(idActivo, buffer);
   }
+
+  /**
+   * Construye un AudioBuffer desde canales Float32 crudos (ruta de carga de
+   * proyectos .telar.json: el audio embebido se restaura sin pérdida y SIN
+   * pasar por decodeAudioData, que remuestrearía a la tasa de sesión).
+   * El buffer conserva la tasa original del documento; la línea de tiempo ya
+   * trabaja con clips que declaran su propia sampleRate.
+   */
+  crearBuffer(canales: Float32Array[], tasaMuestreo: number): AudioBuffer {
+    if (canales.length === 0) {
+      throw new ErrorValidacion({
+        codigo: 'BUFFER_SIN_CANALES',
+        mensaje: 'Se intentó crear un AudioBuffer sin canales.',
+        mensajeUsuario: 'El archivo de proyecto está dañado (un audio no tiene canales).',
+        reintentable: false,
+      });
+    }
+    const longitud = canales[0]!.length;
+    const buffer = this.contextoAudio().createBuffer(canales.length, longitud, tasaMuestreo);
+    for (let canal = 0; canal < canales.length; canal += 1) {
+      /* Float32Array llega tipado como ArrayBufferLike (podría ser un
+       * SharedArrayBuffer según los tipos), pero los canales de un proyecto
+       * siempre son respaldos ArrayBuffer creados por float32DesdeBase64. */
+      buffer.copyToChannel(canales[canal]! as Float32Array<ArrayBuffer>, canal);
+    }
+    return buffer;
+  }
 }

@@ -24,6 +24,7 @@ export function cargarConfig(entrada: unknown = configPorDefecto): ResultadoConf
       lineaTiempo: base.lineaTiempo ?? {},
       ffmpegMp3: base.ffmpegMp3 ?? {},
       ui: base.ui ?? {},
+      proyectos: base.proyectos ?? {},
       transcripcion: base.transcripcion ?? {},
       catalogos: base.catalogos ?? {},
     };

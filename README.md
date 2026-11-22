@@ -28,9 +28,10 @@ Todo el procesamiento ligero ocurre **en tu navegador** (Chrome de escritorio). 
 | Exportación WAV | **Implementada** (codificador propio probado) | `packages/nodos` |
 | Exportación MP3 (ffmpeg.wasm) | **Implementada, NO verificada en navegador en el entorno de generación** (ver «Exportar MP3») | `packages/app` |
 | Subida de audio con transcodificación de rescate (AMR, 3gp, WMA, ALAC…) | **Implementada y verificada en navegador** (rescate con backend real y con ffmpeg.wasm; aviso por etapa y error honesto si ambos fallan) | `packages/app`, `backend` |
-| Persistencia entre sesiones (IndexedDB/OPFS) | **NO implementada**: plan en `docs/pending/persistencia-opfs.md` | `docs/pending/` |
+| Guardar/cargar proyectos `.telar.json` (línea de tiempo con audio embebido sin pérdida + transcripciones/datos con sus revisiones) | **Implementado y verificado en navegador** (ida y vuelta completa: guardar → recargar → cargar) | `packages/app` (ADR-016) |
+| Persistencia automática entre sesiones (IndexedDB/OPFS) | **NO implementada**: los proyectos se guardan/cargan a mano con «Guardar/Abrir»; el guardado automático sigue en `docs/pending/persistencia-opfs.md` | `docs/pending/` |
 
-La lista completa de decisiones técnicas está en `docs/decisions/` (ADR-001…ADR-015).
+La lista completa de decisiones técnicas está en `docs/decisions/` (ADR-001…ADR-016).
 
 ---
 

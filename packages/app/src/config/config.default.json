@@ -31,6 +31,11 @@
   "ui": {
     "maximoSubidasSimultaneas": 3
   },
+  "proyectos": {
+    "versionFormato": 1,
+    "tamanoMaximoMb": 512,
+    "prefijoNombre": "proyecto-telar"
+  },
   "transcripcion": {
     "modeloDefecto": "small"
   },

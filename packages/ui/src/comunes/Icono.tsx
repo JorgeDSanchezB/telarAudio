@@ -39,7 +39,8 @@ export type NombreIcono =
   | 'cerrar'
   | 'lupa'
   | 'candado'
-  | 'papelera';
+  | 'papelera'
+  | 'abrir';
 
 const TRAZOS: Record<NombreIcono, React.ReactNode> = {
   reproducir: <polygon points="7 4.5 19.5 12 7 19.5 7 4.5" fill="currentColor" stroke="none" />,
@@ -199,6 +200,12 @@ const TRAZOS: Record<NombreIcono, React.ReactNode> = {
     <>
       <circle cx="12" cy="12" r="9" />
       <circle cx="12" cy="12" r="2.6" />
+    </>
+  ),
+  abrir: (
+    <>
+      <path d="M21 17V9a2 2 0 0 0-2-2h-7.6a2 2 0 0 1-1.7-1l-.8-1.4a2 2 0 0 0-1.7-1H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" />
+      <path d="M3 11h18" />
     </>
   ),
   cerrar: (

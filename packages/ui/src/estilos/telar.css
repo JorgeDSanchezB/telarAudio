@@ -825,6 +825,101 @@
   overflow-y: auto;
 }
 
+/* ---------------------------------------------------- panel «Datos» */
+
+.tlr-datos {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tlr-datos-cabecera {
+  margin: 0;
+  padding: 12px 14px 10px;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--tlr-texto-suave);
+  border-bottom: 1px solid var(--tlr-borde-suave);
+}
+
+.tlr-datos-lista {
+  overflow-y: auto;
+  min-height: 0;
+  flex: none;
+  max-height: 45%;
+}
+
+.tlr-dato-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--tlr-borde-suave);
+  background: transparent;
+  color: var(--tlr-texto);
+  font-family: var(--tlr-fuente-ui);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 130ms ease;
+}
+
+.tlr-dato-fila:hover { background: rgba(237, 231, 223, 0.035); }
+
+.tlr-dato-fila .tlr-icono {
+  color: var(--tlr-texto-tenue);
+  flex: none;
+  transition: color 130ms ease;
+}
+
+.tlr-dato-fila-seleccionada {
+  background: rgba(226, 162, 74, 0.08);
+  box-shadow: inset 2.5px 0 0 var(--tlr-acento);
+}
+
+.tlr-dato-fila-seleccionada .tlr-icono { color: var(--tlr-acento); }
+
+.tlr-dato-nombre {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tlr-dato-meta {
+  flex: none;
+  font-family: var(--tlr-fuente-datos);
+  font-size: 10px;
+  color: var(--tlr-texto-tenue);
+}
+
+.tlr-datos-visores {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--tlr-borde-suave);
+  padding: 12px 14px;
+}
+
+.tlr-datos-pista {
+  margin: 0;
+  padding: 10px 16px 12px;
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--tlr-texto-tenue);
+  border-top: 1px solid var(--tlr-borde-suave);
+  background: var(--tlr-superficie);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tlr-datos-pista .tlr-icono { flex: none; opacity: 0.8; }
+
 .tlr-activo {
   display: flex;
   align-items: center;

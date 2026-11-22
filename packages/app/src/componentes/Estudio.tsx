@@ -7,11 +7,12 @@
  * aquí solo se cablea.
  */
 
-import { useEffect, useMemo } from 'react';
-import type { DefinicionNodo } from '@telar/motor';
+import { useEffect, useMemo, useRef } from 'react';
+import type { DefinicionNodo, DatoRegistrado } from '@telar/motor';
 import { useAlmacen } from '../estado/almacen';
 import { Avisos } from './Avisos';
 import { BibliotecaActivos } from './BibliotecaActivos';
+import { DatosSesion } from './DatosSesion';
 import { VisoresDatos } from './VisoresDatos';
 import { FronteraError, Icono, Inspector, LienzoNodos, Marca, PaletaNodos } from '@telar/ui';
 import type { ConexionEntrante } from '@telar/ui';
@@ -65,6 +66,11 @@ export function Estudio() {
   const descargarActivo = useAlmacen((estado) => estado.descargarActivo);
   const exportarActivoMp3 = useAlmacen((estado) => estado.exportarActivoMp3);
 
+  const guardarProyecto = useAlmacen((estado) => estado.guardarProyecto);
+  const cargarProyecto = useAlmacen((estado) => estado.cargarProyecto);
+  const ocupadoProyecto = useAlmacen((estado) => estado.ocupadoProyecto);
+  const entradaProyecto = useRef<HTMLInputElement>(null);
+
   const pistasEditadasDesdeMotor = useAlmacen((estado) => estado.pistasEditadasDesdeMotor);
   const eliminarPistaDeTiempo = useAlmacen((estado) => estado.eliminarPistaDeTiempo);
   const deshacerLineaTiempo = useAlmacen((estado) => estado.deshacerLineaTiempo);
@@ -95,6 +101,15 @@ export function Estudio() {
     () => instancias.find((instancia) => instancia.id === idSeleccionado) ?? null,
     [instancias, idSeleccionado],
   );
+
+  /* Datos de la sesión para el panel «Datos» y para saber si hay algo que
+   * guardar. La lista del registro no es reactiva: los cambios llegan por
+   * versionDatos (revisión/carga) y ultimoInforme (fin de ejecución). */
+  const datosSesion = useMemo<DatoRegistrado[]>(
+    () => estudio?.datos.listar() ?? [],
+    [estudio, versionDatos, ultimoInforme],
+  );
+  const hayParaGuardar = pistas.length > 0 || datosSesion.length > 0;
 
   const conexionesEntrantes = useMemo<ConexionEntrante[]>(() => {
     if (!seleccionado || !estudio) {
@@ -172,6 +187,45 @@ export function Estudio() {
           Comprobar
         </button>
         <span style={{ flex: 1 }} />
+        <input
+          ref={entradaProyecto}
+          type="file"
+          accept=".telar.json,application/json"
+          style={{ display: 'none' }}
+          onChange={(evento) => {
+            const archivo = evento.target.files?.[0];
+            if (archivo) {
+              void cargarProyecto(archivo);
+            }
+            evento.target.value = '';
+          }}
+        />
+        <button
+          type="button"
+          className="tlr-boton tlr-boton-mini"
+          onClick={() => void guardarProyecto()}
+          disabled={ocupadoProyecto || !hayParaGuardar}
+          title={
+            hayParaGuardar
+              ? 'Guarda la línea de tiempo (con su audio) y las transcripciones/datos en un archivo .telar.json'
+              : 'Nada que guardar: la línea de tiempo y los datos están vacíos'
+          }
+          data-testid="guardar-proyecto"
+        >
+          <Icono nombre="disco" tamaño={12} />
+          {ocupadoProyecto ? 'Guardando…' : 'Guardar'}
+        </button>
+        <button
+          type="button"
+          className="tlr-boton tlr-boton-mini"
+          onClick={() => entradaProyecto.current?.click()}
+          disabled={ocupadoProyecto}
+          title="Carga un proyecto .telar.json guardado: restaura la línea de tiempo (con su audio) y las transcripciones/datos"
+          data-testid="abrir-proyecto"
+        >
+          <Icono nombre="abrir" tamaño={12} />
+          {ocupadoProyecto ? 'Cargando…' : 'Abrir'}
+        </button>
         <button
           type="button"
           className={`tlr-boton tlr-boton-primario ${ejecutando ? 'tlr-boton-ejecutando' : ''}`}
@@ -216,11 +270,24 @@ export function Estudio() {
             <span>Biblioteca</span>
             <span className="tlr-pestanas-cuenta">{activos.length}</span>
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={pestañaIzquierda === 'datos'}
+            onClick={() => fijarPestañaIzquierda('datos')}
+            title="Transcripciones y datos de la sesión (se guardan y cargan con el proyecto)"
+          >
+            <Icono nombre="capas" tamaño={13} />
+            <span>Datos</span>
+            {datosSesion.length > 0 ? (
+              <span className="tlr-pestanas-cuenta">{datosSesion.length}</span>
+            ) : null}
+          </button>
         </div>
         <div className="tlr-pestanas-contenido">
           {pestañaIzquierda === 'paleta' ? (
             <PaletaNodos definiciones={estudio.registro.listar()} onAñadir={(tipo) => añadirNodo(tipo)} />
-          ) : (
+          ) : pestañaIzquierda === 'biblioteca' ? (
             <BibliotecaActivos
               activos={activos}
               ocupadoMp3={ocupadoMp3}
@@ -230,6 +297,13 @@ export function Estudio() {
               onDescargar={descargarActivo}
               onExportarMp3={(id) => void exportarActivoMp3(id)}
               onEliminar={eliminarActivo}
+            />
+          ) : (
+            <DatosSesion
+              datos={datosSesion}
+              registro={estudio.datos}
+              catalogoMuletillas={estudio.config.catalogos.muletillas}
+              onRevisar={revisarDato}
             />
           )}
         </div>

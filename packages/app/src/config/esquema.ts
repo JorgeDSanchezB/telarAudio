@@ -62,6 +62,15 @@ const esquemaUi = z.strictObject({
   maximoSubidasSimultaneas: z.number().int().min(1).max(16).default(3),
 });
 
+const esquemaProyectos = z.strictObject({
+  /** Versión del formato .telar.json que ESCRIBE esta app (al cargar se acepta solo esa). */
+  versionFormato: z.number().int().min(1).max(99).default(1),
+  /** Techo de seguridad para guardar/cargar (MB): un documento embebe el audio en base64 y puede crecer mucho. */
+  tamanoMaximoMb: z.number().int().min(8).max(2048).default(512),
+  /** Prefijo del nombre de descarga; se le añade fecha y hora (proyecto-telar-20261122-1930.telar.json). */
+  prefijoNombre: z.string().min(1).default('proyecto-telar'),
+});
+
 const esquemaTranscripcion = z.strictObject({
   /** Modelo Whisper por defecto del nodo (tiny/base/small). */
   modeloDefecto: z.enum(['tiny', 'base', 'small']).default('small'),
@@ -101,6 +110,7 @@ export const esquemaConfigApp = z.strictObject({
   lineaTiempo: esquemaLineaTiempo,
   ffmpegMp3: esquemaFfmpegMp3,
   ui: esquemaUi,
+  proyectos: esquemaProyectos,
   transcripcion: esquemaTranscripcion,
   catalogos: esquemaCatalogos,
 });
